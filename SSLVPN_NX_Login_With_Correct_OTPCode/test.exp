@@ -1,0 +1,95 @@
+#!/usr/bin/expect -f
+
+if {[llength $argv] < 5} {
+    puts "Usage: $argv0 <username> <password> <domain> <server> <otp_json> [timeout_seconds]"
+    exit 2
+}
+
+set username [lindex $argv 0]
+set password [lindex $argv 1]
+set domain   [lindex $argv 2]
+set server   [lindex $argv 3]
+set otp_file [lindex $argv 4]
+
+set wait_otp_timeout 120
+if {[llength $argv] >= 6} {
+    set wait_otp_timeout [expr {[lindex $argv 5] + 0}]
+}
+
+set timeout -1
+
+puts "\n>>> Starting NetExtender for $username in TMUX session"
+puts ">>> Session: vpn_$username"
+puts ">>> Time: [clock format [clock seconds]]"
+
+spawn netExtender -u $username -p $password -d $domain $server -xapps --always-trust
+
+expect {
+    -re {One ?Time Password:} {
+        puts "\n>>> OTP requested for $username - waiting for OTP file..."
+        set otp ""
+        set start_time [clock seconds]
+
+        while {[expr {[clock seconds] - $start_time}] < $wait_otp_timeout} {
+            if {[file exists $otp_file]} {
+                set pycode {
+import json, sys
+try:
+    with open(sys.argv[1], 'r') as f:
+        data = json.load(f)
+    otp = data.get(sys.argv[2], "")
+    if otp:
+        print(otp)
+except: pass
+}
+                set result ""
+                catch {set result [exec python3 -c $pycode $otp_file $username]} err
+
+                if {$result ne ""} {
+                    set otp $result
+                    puts ">>> Found OTP: $otp"
+                    send "$otp\r"
+                    break
+                }
+            }
+            sleep 2
+        }
+
+        if {$otp eq ""} {
+            puts "!!! ERROR: OTP not found for $username"
+            exit 1
+        }
+        exp_continue
+    }
+
+    -re {NetExtender connected successfully} {
+        puts "\n SUCCESS: $username connected !!!"
+        puts ">>> Connection established at: [clock format [clock seconds]]"
+        puts ">>> NetExtender is running in this TMUX session"
+        puts ">>> Use 'Ctrl + B then D' to detach from this session"
+
+        # 保持连接运行
+        set timeout -1
+        expect eof
+    }
+
+    -re {Login failed|Authentication failed|Invalid credentials} {
+        puts "\n!!! ERROR: Authentication failed for $username"
+        exit 1
+    }
+
+    -re {already connected} {
+        puts "\n!!! ERROR: User $username is already connected"
+        exit 1
+    }
+
+    eof {
+        puts "\n>>> NetExtender process ended for $username at: [clock format [clock seconds]]"
+        exit 0
+    }
+
+    timeout {
+        puts "\n!!! ERROR: Timeout for $username"
+        exit 1
+    }
+}

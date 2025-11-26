@@ -1,0 +1,18 @@
+1.Description:
+This test case is designed to continuously test the SSLVPN portal by performing repeated login and logout operations.
+
+Step 1: Delete the mapping files and the files storing OTP codes.
+Step 2: Remove all virtual network interfaces under ens192.
+Step 3: Add virtual network interfaces and create mapping files that associate each user with a corresponding virtual interface IP address.
+Step 4: Perform user login and 2FA authentication.
+Step 5: Perform user logout.
+Step 6: Repeat this process.
+
+2.Topology
+Firewall interface(WAN)--Ubuntu(ens192)
+
+3.Scripts Topology:
+Users 2FA Login/
+├─ SSLVPNPortal_Login_With_Correct_OTPCode/
+│  └─ config_data.py
+└─ SMTP_Server.py

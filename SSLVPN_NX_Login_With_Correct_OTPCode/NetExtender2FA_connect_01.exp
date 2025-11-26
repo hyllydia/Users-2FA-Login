@@ -1,0 +1,73 @@
+#!/usr/bin/expect -f
+
+# 接收从Python传入的参数
+set username [lindex $argv 0]
+set password [lindex $argv 1]
+set domain [lindex $argv 2]
+set server [lindex $argv 3]
+set otp_file [lindex $argv 4]
+set wait_otp_timeout 60
+set timeout -1
+
+puts "***NetExtender***"
+puts "$username"
+
+# 1. 启动VPN连接
+spawn netExtender -u $username -p $password -d $domain $server -xapps --always-trust
+
+# 2. 等待 OTP 提示或连接成功
+expect {
+    -re "One Time Password:" {
+        puts "[INFO] OTP prompt detected for $username"
+
+        # 3. 循环等待 OTP 出现在 otp_file 中
+        set otp ""
+        set pycode {import json,sys
+try:
+    d=json.load(open(sys.argv[1]))
+    v=d.get(sys.argv[2],"")
+    if v is None:
+        v=""
+    sys.stdout.write(str(v))
+except Exception:
+    sys.stdout.write("")}
+
+        for {set i 0} {$i < $wait_otp_timeout} {incr i} {
+            if {[file exists $otp_file]} {
+                set result ""
+                catch {set result [exec python3 -c $pycode $otp_file $username]} err
+                if {$result ne ""} {
+                    set otp $result
+                    puts "[INFO] Found OTP for $username: $otp"
+                    break
+                }
+            }
+            sleep 1
+        }
+
+        if {$otp eq ""} {
+            puts "[ERROR] Timeout waiting for OTP for $username"
+            exit 1
+        }
+
+        # 4. 发送 OTP
+        send "$otp\r"
+        exp_continue
+    }
+
+    "NetExtender connected successfully." {
+        puts "[INFO] $username connected successfully."
+        set timeout -1
+        expect eof  # 保持连接
+    }
+
+    timeout {
+        send_user "Timeout waiting for OTP or connection prompt!\n"
+        exit 1
+    }
+
+    eof {
+        puts "[INFO] Connection ended (EOF)"
+        exit 1
+    }
+}
