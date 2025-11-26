@@ -1,1 +1,17 @@
+1.Description:
+This test case is designed to continuously test the SSLVPN NetExtender by performing repeated login and logout operations.
 
+Step 1: Delete the mapping files and the files storing OTP codes.
+Step 2: Perform user login and 2FA authentication.
+Step 3: exp file.
+Step 4: Perform user logout.
+Step 5: Repeat this process.
+
+2.Topology
+Firewall interface(X1)--Ubuntu(ens160)
+
+3.Scripts Topology:
+Users 2FA Login/
+├─ SSLVPN_NX_Login_With_Correct_OTPCode/
+│  └─ nx_data.py
+└─ SMTP_Server.py
